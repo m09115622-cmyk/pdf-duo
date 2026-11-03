@@ -1,0 +1,663 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>PDF Duo</title>
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2355c8">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+/*
+  Layout: a slim top bar over one workspace. The workspace shows one document, or two panes that
+  sit side by side in landscape and stack top to bottom in portrait.
+*/
+:root {
+  --bg: #eceef2;
+  --surface: #ffffff;
+  --surface-2: #f4f5f8;
+  --fg: #171c27;
+  --muted: #58616f;
+  --line: #d3d8e1;
+  --accent: #2355c8;
+  --accent-fg: #ffffff;
+  --canvas: #dde1e9;
+  --focus: #2355c8;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418;
+    --surface: #1a1e25;
+    --surface-2: #232933;
+    --fg: #e9ecf2;
+    --muted: #a3acbd;
+    --line: #2d333e;
+    --accent: #8fb2ff;
+    --accent-fg: #0b1220;
+    --canvas: #0b0d11;
+    --focus: #8fb2ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418;
+  --surface: #1a1e25;
+  --surface-2: #232933;
+  --fg: #e9ecf2;
+  --muted: #a3acbd;
+  --line: #2d333e;
+  --accent: #8fb2ff;
+  --accent-fg: #0b1220;
+  --canvas: #0b0d11;
+  --focus: #8fb2ff;
+  color-scheme: dark;
+}
+
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.app { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+
+/* Top bar */
+.topbar { flex: none; background: var(--surface); border-bottom: 1px solid var(--line); }
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding-block: 8px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.brand { flex: 1; min-width: 0; font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
+
+.notice {
+  flex: none;
+  margin: 0;
+  padding-block: 8px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+/* Buttons */
+.btn {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.icon-btn {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.icon-btn:hover:not(:disabled) { background: var(--surface-2); }
+.icon-btn:disabled { opacity: 0.35; cursor: default; }
+button:focus-visible, .pane-view:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+  opacity: 0;
+}
+
+/* Workspace */
+.workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+}
+.workspace[data-split="true"][data-orient="landscape"] { flex-direction: row; }
+.workspace[data-split="true"][data-orient="portrait"] { flex-direction: column; }
+
+.empty {
+  margin: auto;
+  max-width: 34em;
+  padding-block: 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.empty h1 { margin: 0; font-size: 22px; line-height: 1.2; font-weight: 700; text-wrap: balance; }
+.empty p { margin: 0; color: var(--muted); text-wrap: pretty; }
+.empty .fine { font-size: 13px; }
+
+/* Panes */
+.pane {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+}
+.workspace[data-split="true"][data-orient="landscape"] .pane + .pane { border-left: 1px solid var(--line); }
+.workspace[data-split="true"][data-orient="portrait"] .pane + .pane { border-top: 1px solid var(--line); }
+
+.pane-bar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding-block: 6px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.pane-name {
+  flex: 1 1 96px;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pane-tools { display: flex; align-items: center; flex: none; gap: 2px; }
+.readout {
+  min-width: 58px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sep { width: 1px; height: 22px; margin-inline: 4px; background: var(--line); }
+
+.pane-view {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+  background: var(--canvas);
+}
+.pages {
+  position: relative;
+  box-sizing: border-box;
+  padding-block: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.page {
+  position: relative;
+  margin: 0 auto 16px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 6px 18px rgb(0 0 0 / 0.16);
+}
+.page canvas { display: block; width: 100%; height: 100%; }
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .pane-bar { padding-block: 4px; }
+  .pane-name { font-size: 14px; }
+}
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="brand">PDF Duo</span>
+      <button class="btn primary" type="button" id="open-btn">Open PDF</button>
+    </div>
+  </header>
+
+  <p class="notice" id="notice" role="status" hidden></p>
+
+  <main class="workspace" id="workspace" data-split="false" data-orient="portrait">
+    <section class="empty" id="empty" aria-labelledby="empty-title">
+      <h1 id="empty-title">Read two PDFs at once</h1>
+      <p>Open a PDF, then open a second one. In landscape they sit side by side. In portrait, one sits above the other.</p>
+      <button class="btn primary" type="button" id="empty-open">Open PDF</button>
+      <p class="fine">Files are read in your browser. They are never uploaded.</p>
+    </section>
+  </main>
+</div>
+
+<input type="file" id="file-input" class="visually-hidden" accept="application/pdf,.pdf" multiple tabindex="-1">
+
+<template id="pane-template">
+  <section class="pane">
+    <header class="pane-bar">
+      <h2 class="pane-name"></h2>
+      <button class="icon-btn" type="button" data-action="close" aria-label="Close document" title="Close">&times;</button>
+      <div class="pane-tools" role="toolbar" aria-label="Document tools">
+        <button class="icon-btn" type="button" data-action="prev" aria-label="Previous page" title="Previous page">&lsaquo;</button>
+        <span class="readout" data-role="page">&ndash;</span>
+        <button class="icon-btn" type="button" data-action="next" aria-label="Next page" title="Next page">&rsaquo;</button>
+        <span class="sep" aria-hidden="true"></span>
+        <button class="icon-btn" type="button" data-action="zoom-out" aria-label="Zoom out" title="Zoom out">&minus;</button>
+        <span class="readout" data-role="zoom">100%</span>
+        <button class="icon-btn" type="button" data-action="zoom-in" aria-label="Zoom in" title="Zoom in">+</button>
+        <button class="icon-btn" type="button" data-action="swap" aria-label="Swap the two documents" title="Swap" hidden>&#8644;</button>
+      </div>
+    </header>
+    <div class="pane-view" tabindex="0">
+      <div class="pages"></div>
+    </div>
+  </section>
+</template>
+
+<script type="module">
+import * as pdfjsLib from './vendor/pdf.min.mjs';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', import.meta.url).href;
+
+const MAX_DOCS = 2;
+const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+const FIT_ZOOM_INDEX = 2;      // 100%: the page fills the pane width
+const GAP = 16;                // space above, between and below pages, in CSS pixels
+const MAX_RENDER_DPR = 2;      // cap canvas density to keep memory in check on phones
+
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const landscape = matchMedia('(orientation: landscape)');
+
+const el = {
+  workspace: document.getElementById('workspace'),
+  empty: document.getElementById('empty'),
+  openBtn: document.getElementById('open-btn'),
+  emptyOpen: document.getElementById('empty-open'),
+  notice: document.getElementById('notice'),
+  picker: document.getElementById('file-input'),
+  paneTemplate: document.getElementById('pane-template'),
+};
+
+const docs = [];               // open documents, in on-screen order
+let docCounter = 0;
+let noticeTimer = 0;
+
+/* ---------- notices ---------- */
+
+function notify(message) {
+  el.notice.textContent = message;
+  el.notice.hidden = false;
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => { el.notice.hidden = true; }, 5000);
+}
+
+/* ---------- opening ---------- */
+
+el.openBtn.addEventListener('click', () => el.picker.click());
+el.emptyOpen.addEventListener('click', () => el.picker.click());
+
+el.picker.addEventListener('change', async () => {
+  const files = Array.from(el.picker.files ?? []);
+  el.picker.value = '';
+  if (files.length === 0) return;
+
+  const free = MAX_DOCS - docs.length;
+  if (free <= 0) {
+    notify('Two PDFs are already open. Close one to open another.');
+    return;
+  }
+  if (files.length > free) {
+    notify(`Only ${free} more PDF${free === 1 ? ' can' : 's can'} open right now. The rest were skipped.`);
+  }
+  for (const file of files.slice(0, free)) {
+    await openFile(file);
+  }
+});
+
+function openErrorMessage(name, error) {
+  if (error?.name === 'PasswordException') {
+    return `${name} is password protected. Password-protected PDFs aren't supported yet.`;
+  }
+  return `${name} couldn't be opened. Check that it is a valid PDF.`;
+}
+
+async function openFile(file) {
+  if (!file.type.includes('pdf') && !/\.pdf$/i.test(file.name)) {
+    notify(`${file.name} isn't a PDF.`);
+    return;
+  }
+
+  let task;
+  let pdf;
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    task = pdfjsLib.getDocument({ data: bytes });
+    pdf = await task.promise;
+  } catch (error) {
+    task?.destroy();
+    notify(openErrorMessage(file.name, error));
+    return;
+  }
+
+  if (pdf.numPages === 0) {
+    task.destroy();
+    notify(`${file.name} has no pages.`);
+    return;
+  }
+
+  const doc = {
+    id: ++docCounter,
+    name: file.name,
+    task,
+    pdf,
+    pages: [],
+    byEl: new Map(),
+    zoomIndex: FIT_ZOOM_INDEX,
+    current: 0,
+    paneWidth: 0,
+    trackFrame: 0,
+  };
+
+  try {
+    await measurePages(doc);
+  } catch (error) {
+    task.destroy();
+    notify(openErrorMessage(file.name, error));
+    return;
+  }
+
+  mountDoc(doc);
+  docs.push(doc);
+  layoutWorkspace();
+}
+
+/* Read every page's size up front, so the scroll height is right before anything renders. */
+async function measurePages(doc) {
+  for (let number = 1; number <= doc.pdf.numPages; number += 1) {
+    const page = await doc.pdf.getPage(number);
+    const { width, height } = page.getViewport({ scale: 1 });
+    page.cleanup();
+    doc.pages.push({
+      index: number - 1,
+      width,
+      height,
+      el: null,
+      canvas: null,
+      cssWidth: 0,
+      renderedWidth: 0,
+      near: false,
+      token: 0,
+      task: null,
+      top: GAP,
+    });
+  }
+}
+
+/* ---------- panes ---------- */
+
+function mountDoc(doc) {
+  const pane = el.paneTemplate.content.firstElementChild.cloneNode(true);
+  doc.pane = pane;
+  doc.view = pane.querySelector('.pane-view');
+  doc.pagesEl = pane.querySelector('.pages');
+  doc.pageReadout = pane.querySelector('[data-role="page"]');
+  doc.zoomReadout = pane.querySelector('[data-role="zoom"]');
+  doc.buttons = {
+    prev: pane.querySelector('[data-action="prev"]'),
+    next: pane.querySelector('[data-action="next"]'),
+    zoomOut: pane.querySelector('[data-action="zoom-out"]'),
+    zoomIn: pane.querySelector('[data-action="zoom-in"]'),
+    swap: pane.querySelector('[data-action="swap"]'),
+    close: pane.querySelector('[data-action="close"]'),
+  };
+
+  pane.querySelector('.pane-name').textContent = doc.name;
+  doc.view.setAttribute('aria-label', `${doc.name}, ${doc.pages.length} pages`);
+
+  const fragment = document.createDocumentFragment();
+  for (const page of doc.pages) {
+    const pageEl = document.createElement('div');
+    pageEl.className = 'page';
+    page.el = pageEl;
+    doc.byEl.set(pageEl, page);
+    fragment.append(pageEl);
+  }
+  doc.pagesEl.append(fragment);
+
+  doc.observer = new IntersectionObserver(onPageVisibility(doc), { root: doc.view, rootMargin: '100% 0px' });
+  for (const page of doc.pages) doc.observer.observe(page.el);
+
+  doc.resizeObserver = new ResizeObserver(() => handlePaneResize(doc));
+  doc.resizeObserver.observe(doc.view);
+
+  doc.view.addEventListener('scroll', () => scheduleTrack(doc), { passive: true });
+  doc.buttons.prev.addEventListener('click', () => goToPage(doc, doc.current - 1));
+  doc.buttons.next.addEventListener('click', () => goToPage(doc, doc.current + 1));
+  doc.buttons.zoomOut.addEventListener('click', () => setZoom(doc, doc.zoomIndex - 1));
+  doc.buttons.zoomIn.addEventListener('click', () => setZoom(doc, doc.zoomIndex + 1));
+  doc.buttons.swap.addEventListener('click', swapDocs);
+  doc.buttons.close.addEventListener('click', () => closeDoc(doc));
+
+  el.workspace.append(pane);
+}
+
+function closeDoc(doc) {
+  doc.observer.disconnect();
+  doc.resizeObserver.disconnect();
+  cancelAnimationFrame(doc.trackFrame);
+  for (const page of doc.pages) releasePage(page);
+  doc.task.destroy();
+  doc.pane.remove();
+  docs.splice(docs.indexOf(doc), 1);
+  layoutWorkspace();
+}
+
+function swapDocs() {
+  if (docs.length !== 2) return;
+  const offsets = new Map(docs.map((doc) => [doc, doc.view.scrollTop]));
+  docs.reverse();
+  el.workspace.append(docs[0].pane, docs[1].pane);
+  for (const doc of docs) doc.view.scrollTop = offsets.get(doc);
+  layoutWorkspace();
+}
+
+/* Shows the right arrangement for the current number of documents and the screen orientation. */
+function layoutWorkspace() {
+  const split = docs.length === 2;
+  el.workspace.dataset.split = String(split);
+  el.workspace.dataset.orient = landscape.matches ? 'landscape' : 'portrait';
+  el.empty.hidden = docs.length > 0;
+  el.openBtn.disabled = docs.length >= MAX_DOCS;
+  el.openBtn.title = docs.length >= MAX_DOCS ? 'Two PDFs are open. Close one to open another.' : '';
+  for (const doc of docs) doc.buttons.swap.hidden = !split;
+}
+
+landscape.addEventListener('change', layoutWorkspace);
+
+/* ---------- layout and zoom ---------- */
+
+function handlePaneResize(doc) {
+  if (doc.view.clientWidth !== doc.paneWidth) {
+    layoutPages(doc, true);
+  } else {
+    for (const page of doc.pages) if (page.near) renderPage(doc, page);
+  }
+}
+
+function layoutPages(doc, keepPosition) {
+  const styles = getComputedStyle(doc.pagesEl);
+  const available = doc.pagesEl.clientWidth
+    - parseFloat(styles.paddingLeft)
+    - parseFloat(styles.paddingRight);
+  const cssWidth = Math.max(160, Math.floor(available * ZOOM_STEPS[doc.zoomIndex]));
+
+  let top = GAP;
+  for (const page of doc.pages) {
+    const cssHeight = Math.round(cssWidth * page.height / page.width);
+    page.cssWidth = cssWidth;
+    page.top = top;
+    page.el.style.width = `${cssWidth}px`;
+    page.el.style.height = `${cssHeight}px`;
+    top += cssHeight + GAP;
+  }
+
+  doc.paneWidth = doc.view.clientWidth;
+  updateReadouts(doc);
+  if (keepPosition) scrollToPage(doc, doc.current, false);
+  for (const page of doc.pages) if (page.near) renderPage(doc, page);
+}
+
+function setZoom(doc, index) {
+  const next = Math.min(ZOOM_STEPS.length - 1, Math.max(0, index));
+  if (next === doc.zoomIndex) return;
+  doc.zoomIndex = next;
+  layoutPages(doc, true);
+}
+
+function goToPage(doc, index) {
+  const target = Math.min(doc.pages.length - 1, Math.max(0, index));
+  doc.current = target;
+  updateReadouts(doc);
+  scrollToPage(doc, target, true);
+}
+
+function scrollToPage(doc, index, smooth) {
+  const page = doc.pages[index];
+  if (!page) return;
+  doc.view.scrollTo({
+    top: Math.max(0, page.top - 8),
+    behavior: smooth && !reduceMotion ? 'smooth' : 'auto',
+  });
+}
+
+function updateReadouts(doc) {
+  const last = doc.pages.length - 1;
+  doc.pageReadout.textContent = `${doc.current + 1} / ${doc.pages.length}`;
+  doc.zoomReadout.textContent = `${Math.round(ZOOM_STEPS[doc.zoomIndex] * 100)}%`;
+  doc.buttons.prev.disabled = doc.current <= 0;
+  doc.buttons.next.disabled = doc.current >= last;
+  doc.buttons.zoomOut.disabled = doc.zoomIndex <= 0;
+  doc.buttons.zoomIn.disabled = doc.zoomIndex >= ZOOM_STEPS.length - 1;
+}
+
+/* Works out which page sits at the top of the pane, using the cached page tops. */
+function scheduleTrack(doc) {
+  if (doc.trackFrame) return;
+  doc.trackFrame = requestAnimationFrame(() => {
+    doc.trackFrame = 0;
+    const line = doc.view.scrollTop + 48;
+    let low = 0;
+    let high = doc.pages.length - 1;
+    let found = 0;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (doc.pages[mid].top <= line) {
+        found = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    if (found !== doc.current) {
+      doc.current = found;
+      updateReadouts(doc);
+    }
+  });
+}
+
+/* ---------- rendering ---------- */
+
+function onPageVisibility(doc) {
+  return (entries) => {
+    for (const entry of entries) {
+      const page = doc.byEl.get(entry.target);
+      if (!page) continue;
+      page.near = entry.isIntersecting;
+      if (page.near) renderPage(doc, page);
+      else releasePage(page);
+    }
+  };
+}
+
+async function renderPage(doc, page) {
+  if (!page.cssWidth) return;
+  const targetWidth = Math.round(page.cssWidth * Math.min(window.devicePixelRatio || 1, MAX_RENDER_DPR));
+  if (page.canvas && page.renderedWidth === targetWidth) return;
+  if (page.task && page.pendingWidth === targetWidth) return;
+
+  const token = ++page.token;
+  page.task?.cancel();
+  page.task = null;
+  page.pendingWidth = targetWidth;
+
+  let task = null;
+  try {
+    const pdfPage = await doc.pdf.getPage(page.index + 1);
+    if (token !== page.token) return;
+
+    const base = pdfPage.getViewport({ scale: 1 });
+    const viewport = pdfPage.getViewport({ scale: targetWidth / base.width });
+
+    const canvas = page.canvas ?? document.createElement('canvas');
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+    if (!page.canvas) {
+      page.canvas = canvas;
+      page.el.append(canvas);
+    }
+
+    task = pdfPage.render({ canvasContext: canvas.getContext('2d'), viewport });
+    page.task = task;
+    await task.promise;
+    if (token === page.token) page.renderedWidth = targetWidth;
+  } catch (error) {
+    if (error?.name !== 'RenderingCancelledException') console.error(error);
+  } finally {
+    if (task && page.task === task) page.task = null;
+  }
+}
+
+function releasePage(page) {
+  page.token += 1;
+  page.task?.cancel();
+  page.task = null;
+  page.pendingWidth = 0;
+  page.canvas?.remove();
+  page.canvas = null;
+  page.renderedWidth = 0;
+}
+
+layoutWorkspace();
+</script>
+
+<script>
+  // Offline support for the installable copy. Fails quietly where service workers are unavailable.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+</script>

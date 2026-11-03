@@ -1,0 +1,15 @@
+{
+  "name": "PDF Duo",
+  "short_name": "PDF Duo",
+  "description": "Open two PDFs at once: side by side in landscape, stacked in portrait.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eceef2",
+  "theme_color": "#2355c8",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
